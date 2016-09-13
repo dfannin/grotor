@@ -7,6 +7,8 @@ grotor is a graphical user interface for the hamlib antenna rotor control progra
 This a beta release of grotor, so the options and configration settings are limited. Future releases will provide the ability to configure grotor/rotctl, as well as adding elevation display and control.
 
 ## Commands
+setup: grotor requires hamlib to be installed, and rotctld to be running on an antenna rotor controller. For example, starting up a rotctl daemon for a Yaesu G232B rotor on ttyUSB1 : `rotctld -m 603 -r /dev/ttyUSB1 -s 9600`.   grotor uses the "-m 2" NET interface to connect to this daemon. 
+
 to run: `grotor`
 ### grotor options
  -v debug logging to screen and file
@@ -17,6 +19,7 @@ to run: `grotor`
 + python 2.7+
 + pygtk 2.0
 + other python libraries: subprocess, math, logging
++ hamlib 2.0+ (requires rotctl)
 
 grotor is developed and tested  on Linux (Ubuntu 15.10).  Modifications for other OS environments have not been done, but it should be able to work on Windows/Mac with minor modifications.
 ## License
