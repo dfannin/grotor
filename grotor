@@ -1,0 +1,311 @@
+#!/usr/bin/env python
+# -*- coding: utf-8  -*-
+# pylint: disable=too-many-instance-attributes
+
+""" rotor """
+
+import sys
+import getopt
+import pygtk
+pygtk.require('2.0')
+import gtk
+import subprocess
+import math
+import logging
+
+
+def crcolor(color):
+    """ convert hex color to cario color model """
+    gtkcolor = gtk.gdk.Color(color)
+    return (float(gtkcolor.red) / 65535,
+            float(gtkcolor.green) / 65535,
+            float(gtkcolor.blue) / 65535)
+
+
+class Rotor(object):
+    """ Rotor """
+
+    def __init__(self, azbutton_step=45, azdisplay_size=220):
+        """ function """
+        # main window
+        logging.debug("rotor init")
+        self.azbutton_step = azbutton_step
+        self.azdisplay_size = azdisplay_size
+        self.azimuth = 12.0
+        self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+        self.window.connect("destroy", lambda w: gtk.main_quit())
+        self.window.set_title("Rotor Control")
+
+        color = gtk.gdk.color_parse('#EEEEEE')
+        self.window.modify_bg(gtk.STATE_NORMAL, color)
+        # self.window.set_border_width(10)
+
+        # main box
+        self.mainbox = gtk.VBox(False, 5)
+        self.window.add(self.mainbox)
+
+        # main box
+        #     posbox
+        #     controlbox
+        self.posbox = gtk.VBox(False, 5)
+        self.controlbox = gtk.HBox(False, 5)
+
+        self.mainbox.pack_start(self.posbox, True, True, 5)
+        self.mainbox.pack_start(self.controlbox, True, True, 5)
+
+        # main box
+        #     posbox
+        #       eventbox1
+        #           labeltuc
+        #     actionbox
+        #           buttonstop
+        #     controlbox
+        #       azbox
+        #           azbutboz1
+        #           azbutboz2
+        #     drawarea
+
+        self.actionbox = gtk.VButtonBox()
+        self.azbox = gtk.VBox(False, 5)
+        self.azbutbox1 = gtk.HButtonBox()
+        self.azbutbox2 = gtk.HButtonBox()
+
+        self.controlbox.pack_start(self.actionbox, True, True, 5)
+        self.controlbox.pack_start(self.azbox, True, True, 5)
+
+        self.azbox.pack_start(self.azbutbox1, True, True, 0)
+        self.azbox.pack_start(self.azbutbox2, True, True, 0)
+
+        self.init_aztext()
+        self.init_azbuttons()
+        self.init_ctlbuttons()
+        self.init_azdisplay()
+        self.window.show_all()
+
+        logging.debug("rotor init complete")
+
+    def init_azbuttons(self):
+        """ create the az buttons display"""
+        self.azbuttonlist1 = []
+        self.azbuttonlist2 = []
+
+        for a in range(0, 159, self.azbutton_step):
+            b = gtk.Button(str(a))
+            self.azbuttonlist1.append(b)
+        self.azbuttonlist1.append(gtk.Button(str(179)))
+
+        self.azbuttonlist2.append(gtk.Button(str(0)))
+        for a in range(330, 209, -self.azbutton_step):
+            b = gtk.Button(str(a))
+            self.azbuttonlist2.append(b)
+        self.azbuttonlist2.append(gtk.Button(str(181)))
+
+        for b in self.azbuttonlist1:
+            self.azbutbox1.add(b)
+            b.connect("clicked", self.azbutcb, b.get_label())
+
+        for b in self.azbuttonlist2:
+            self.azbutbox2.add(b)
+            b.connect("clicked", self.azbutcb, b.get_label())
+
+    def init_ctlbuttons(self):
+        """ create the control/action buttons display"""
+        self.labelactionbox = gtk.Label("Move Az:")
+        self.actionbox.add(self.labelactionbox)
+
+        self.ccwbutton = gtk.Button("<<CCW")
+        self.ccwbutton.connect("clicked", self.movebuttoncb, "CCW")
+        self.actionbox.add(self.ccwbutton)
+
+        self.stopbutton = gtk.Button("STOP")
+        self.stopbutton.connect("clicked", self.stopbuttoncb, None)
+        self.actionbox.add(self.stopbutton)
+
+        self.cwbutton = gtk.Button("CW>>")
+        self.cwbutton.connect("clicked", self.movebuttoncb, "CW")
+        self.actionbox.add(self.cwbutton)
+
+    def init_azdisplay(self):
+        """ create the drawing area for az display """
+        self.drawarea = gtk.DrawingArea()
+        self.drawarea.set_size_request(self.azdisplay_size, self.azdisplay_size)
+        self.mainbox.pack_start(self.drawarea, True, True, 0)
+        self.drawarea.modify_bg(gtk.STATE_NORMAL, gtk.gdk.Color('#DDDDDD'))
+        self.drawarea.connect('expose-event', self.expose)
+
+    def init_aztext(self):
+        """ create the az text display"""
+        self.eventbox1 = gtk.EventBox()
+        color = gtk.gdk.color_parse('#FFFFFF')
+        self.eventbox1.modify_bg(gtk.STATE_NORMAL, color)
+        self.eventbox1.set_border_width(10)
+
+        self.labelutc = gtk.Label()
+        self.eventbox1.add(self.labelutc)
+        self.posbox.pack_start(self.eventbox1, True, True, 0)
+
+    def expose(self, drawarea, event, data=None):
+        logging.debug("calling expose")
+        self.drawable = self.drawarea.window
+        self.cr = self.drawable.cairo_create()
+        self.cr.set_source_rgb(*crcolor('#588C7E'))
+        w = self.drawarea.allocation.width
+        h = self.drawarea.allocation.height
+
+        self.cr.translate(w/2, h/2)
+        r = min(w/2, h/2) - 30
+
+        self.cr.set_line_width(20)
+        self.cr.arc(0, 0, r, 0, 2*math.pi)
+        self.cr.stroke_preserve()
+
+        self.cr.set_source_rgb(*crcolor('#F9F6F4'))
+        self.cr.fill()
+
+        for i in xrange(12):
+            self.cr.save()
+            self.cr.set_line_width(3)
+            self.cr.set_source_rgb(*crcolor('#0A0A0A'))
+            if i % 3 == 0:
+                inset = 0.2 * r
+                outset = 0.2 * r
+            else:
+                inset = 0.1 * r
+                outset = 0
+            self.cr.move_to(0 + (r - inset) * math.cos(i * math.pi / 6),
+                            0 + (r - inset) * math.sin(i * math.pi / 6))
+            self.cr.line_to(0 + (r + outset) * math.cos(i * math.pi / 6),
+                            0 + (r + outset) * math.sin(i * math.pi / 6))
+            self.cr.stroke()
+            self.cr.restore()
+
+        self.cr.save()
+        self.cr.set_line_width(6)
+        self.cr.set_source_rgb(*crcolor('#990033'))
+        self.cr.rotate(((self.azimuth + 270.0) * math.pi)/180.0)
+        self.cr.move_to(0, 0)
+        self.cr.rel_line_to(r - (r*0.1), 0)
+        self.cr.stroke_preserve()
+        self.cr.restore()
+
+        return False
+
+    def rc(self):
+        """ function """
+        logging.debug("calling rotctl get_pos")
+        try:
+            out_bytes = subprocess.check_output(['rotctl', '-m', '2', 'p'],
+                                                stderr=subprocess.STDOUT)
+            out_text = out_bytes.decode('utf-8')
+            output = out_text.splitlines()
+            return output
+        except subprocess.CalledProcessError as e:
+            logging.error("rotctl get_pos called process error")
+            return ['0', '0']
+
+    def azbutcb(self, widget, data=None):
+        """ function """
+        self.callrotctlp(data)
+
+    def callrotctlp(self, pos):
+        logging.debug("calling rotctl set_pos")
+        """ function """
+        try:
+            out_bytes = subprocess.check_output(['rotctl', '-m', '2', 'P', pos, '0'],
+                                                stderr=subprocess.STDOUT)
+            out_text = out_bytes.decode('utf-8')
+            output = out_text.splitlines()
+            return output
+        except subprocess.CalledProcessError as e:
+            logging.error("rotctl set_pos called process error")
+            return False
+
+    def stopbuttoncb(self, widget, data=None):
+        """ function """
+        logging.debug("calling rotctl stop")
+        try:
+            subprocess.check_output(['rotctl', '-m', '2', 'S'],
+                                    stderr=subprocess.STDOUT)
+            return True
+        except subprocess.CalledProcessError as e:
+            logging.error("rotctl stop called process error")
+            return False
+
+    def movebuttoncb(self, widget, data=None):
+        """ function """
+        logging.debug("calling rotctl move %s" % data)
+        try:
+            dir = "0"
+            speed = "1"
+            if data == "CW":
+                dir = "16"
+                speed = "100"
+            elif data == "CCW":
+                dir = "8"
+                speed = "100"
+            else:
+                logging.error("rotctl move wrong data input")
+                return False
+
+            subprocess.check_output(['rotctl', '-m', '2', 'M', dir, speed],
+                                    stderr=subprocess.STDOUT)
+            return True
+        except subprocess.CalledProcessError as e:
+            logging.error("rotctl move called process error")
+            return False
+
+    def position_update(self):
+        """ function """
+        logging.debug("calling rotor update")
+        pos = self.rc()
+        self.azimuth = float(pos[0])
+        self.labelutc.set_markup(
+           "<span font_family='FreeSans' weight='bold' font='36'>Azimuth: " +
+           "%03.0f" % self.azimuth +
+           "</span>")
+        self.drawarea.queue_draw()
+        return True  # needed to keep the update method in the schedule
+
+
+def usage():
+    print "grotor [-v] [-s step] [-d display]"
+    print "-v: turn on verbose debugging logging"
+    print "-s: az button step, az degrees to step to create buttons (default=45)"
+    print "-d: az display size, size in pixels of az graphic display (default=220)"
+
+
+def main():
+    """ function """
+    gtk.main()
+
+
+# start
+if __name__ == "__main__":
+
+    # parse command line options and args
+
+    debug = logging.CRITICAL
+    azbutton_step = 45
+    azdisplay_size = 220
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "vs:d:")
+    except getopt.GetoptError:
+        usage()
+        sys.exit(2)
+    for o, a in opts:
+        if o == "-v":
+            debug = logging.DEBUG
+        elif o == "-s":
+            azbutton_step = int(a)
+        elif o == "-d":
+            azdisplay_size = int(a)
+
+    #  setup logging
+
+    logging.basicConfig(format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s', level=debug)
+    logging.debug("starting logger")
+
+    #  startup grotor
+    rotor = Rotor(azbutton_step, azdisplay_size)
+    gtk.timeout_add(1000, rotor.position_update)
+    main()
