@@ -3,7 +3,7 @@
 <img src="./img/grotor.png" height="200">
 ---
 ## Description
-grotor is a graphical user interface for the hamlib antenna rotor control program [rotctl](http://hamlib.sourceforge.net/manuals/hamlib.html#rotctl). It provides display of the current azimuth (text and graphic), and provides buttons for controlling the antenna rotor. 
+grotor is a graphical user interface for the hamlib antenna rotor control program [rotctl](http://hamlib.sourceforge.net/manuals/hamlib.html#rotctl). It provides display of the current azimuth (text and graphic), and provides buttons for controlling the antenna rotor.  This software also works well with [K3NG antenna rotor controller software] (https://blog.radioartisan.com/yaesu-rotator-computer-serial-interface/). 
 
 This a beta release of grotor, so the options and configration settings are limited. Future releases will provide the ability to configure grotor/rotctl, as well as adding elevation display and control.
 
