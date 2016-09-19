@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8  -*-
-# pylint: disable=too-many-instance-attributes
 
 """ rotor """
 
@@ -22,39 +21,51 @@ def crcolor(color):
             float(gtkcolor.blue) / 65535)
 
 
-class Rotor(object):
+def usage():
+    print "grotor [-v] [-s step] [-d display]"
+    print "-v: turn on verbose debugging logging"
+    print "-s: az button step, az degrees to step to create buttons (default=45)"
+    print "-d: az display size, size in pixels of az graphic display (default=220)"
+
+
+class RotorApp(gtk.Window):
     """ Rotor """
 
     def __init__(self, azbutton_step=45, azdisplay_size=220):
         """ function """
         # main window
         logging.debug("rotor init")
-        self.updatecount = 0 
+        self.updatecount = 0
         self.azbutton_step = azbutton_step
         self.azdisplay_size = azdisplay_size
         self.azimuth = 12.0
-        self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-        self.window.connect("destroy", lambda w: gtk.main_quit())
-        self.window.set_title("Rotor Control")
+        # self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+        super(RotorApp, self).__init__()
+        self.connect("destroy", lambda w: gtk.main_quit())
+        self.set_title("Rotor Control")
 
         color = gtk.gdk.color_parse('#EEEEEE')
-        self.window.modify_bg(gtk.STATE_NORMAL, color)
+        self.modify_bg(gtk.STATE_NORMAL, color)
 
         # main box
         self.mainbox = gtk.VBox(False, 5)
-        self.window.add(self.mainbox)
+        self.add(self.mainbox)
 
         # main box
+        #     menubox
         #     posbox
         #     controlbox
         #     statusbox
+        self.menubox = gtk.HBox(False, 0)
         self.posbox = gtk.VBox(False, 5)
         self.controlbox = gtk.HBox(False, 5)
 
+        self.mainbox.pack_start(self.menubox, True, True, 5)
         self.mainbox.pack_start(self.posbox, False, False, 5)
         self.mainbox.pack_start(self.controlbox, True, True, 5)
 
         # main box
+        #     menubox
         #     posbox
         #       eventbox1
         #           labeltuc
@@ -77,13 +88,14 @@ class Rotor(object):
         self.azbox.pack_start(self.azbutbox1, True, True, 0)
         self.azbox.pack_start(self.azbutbox2, True, True, 0)
 
+        self.init_menu()
         self.init_aztext()
         self.init_azbuttons()
         self.init_ctlbuttons()
         self.init_azdisplay()
         self.init_statusbar()
 
-        self.window.show_all()
+        self.show_all()
 
         logging.debug("rotor init complete")
 
@@ -147,8 +159,8 @@ class Rotor(object):
         self.eventbox1.modify_bg(gtk.STATE_NORMAL, color)
         self.eventbox1.set_border_width(10)
 
-        self.labelutc = gtk.Label()
-        self.eventbox1.add(self.labelutc)
+        self.labelaz = gtk.Label()
+        self.eventbox1.add(self.labelaz)
         self.posbox.pack_start(self.eventbox1, True, True, 0)
 
     def expose(self, drawarea, event, data=None):
@@ -159,11 +171,11 @@ class Rotor(object):
         w = self.drawarea.allocation.width
         h = self.drawarea.allocation.height
 
-        self.cr.translate(w/2, h/2)
-        r = min(w/2, h/2) - 30
+        self.cr.translate(w / 2, h / 2)
+        r = min(w / 2, h / 2) - 30
 
         self.cr.set_line_width(20)
-        self.cr.arc(0, 0, r, 0, 2*math.pi)
+        self.cr.arc(0, 0, r, 0, 2 * math.pi)
         self.cr.stroke_preserve()
 
         self.cr.set_source_rgb(*crcolor('#F9F6F4'))
@@ -189,13 +201,25 @@ class Rotor(object):
         self.cr.save()
         self.cr.set_line_width(6)
         self.cr.set_source_rgb(*crcolor('#990033'))
-        self.cr.rotate(((self.azimuth + 270.0) * math.pi)/180.0)
+        self.cr.rotate(((self.azimuth + 270.0) * math.pi) / 180.0)
         self.cr.move_to(0, 0)
-        self.cr.rel_line_to(r - (r*0.1), 0)
+        self.cr.rel_line_to(r - (r * 0.1), 0)
         self.cr.stroke_preserve()
         self.cr.restore()
 
         return False
+
+    def init_menu(self):
+        self.menu = gtk.Menu()
+        self.about = gtk.MenuItem("_About")
+        self.menu.append(self.about)
+
+        self.root_menu = gtk.MenuItem("Help")
+        self.root_menu.set_submenu(self.menu)
+        self.menubar = gtk.MenuBar()
+        self.menubox.pack_start(self.menubar, False, False, 0)
+        self.menubar.append(self.root_menu)
+
 
     def rc(self):
         """ function """
@@ -259,7 +283,7 @@ class Rotor(object):
                 logging.error("rotctl move wrong data input")
                 return False
 
-            self.updatestatus("moving %s at speed  %s" % ( dir, speed ))
+            self.updatestatus("moving %s at speed  %s" % (dir, speed))
             subprocess.check_output(['rotctl', '-m', '2', 'M', dir, speed],
                                     stderr=subprocess.STDOUT)
             return True
@@ -271,30 +295,23 @@ class Rotor(object):
     def position_update(self):
         """ function """
         logging.debug("calling rotor update")
-        self.updatecount += 1 
-        if   self.updatecount > 5:
+        self.updatecount += 1
+        if self.updatecount > 5:
             self.updatestatus("")
             self.updatecount = 0
         pos = self.rc()
         self.azimuth = float(pos[0])
-        self.labelutc.set_markup(
-           "<span font_family='FreeSans' weight='bold' font='36'>Azimuth: " +
-           "%03.0f" % self.azimuth +
-           "</span>")
+        self.labelaz.set_markup(
+            "<span font_family='FreeSans' weight='bold' font='36'>Azimuth: " +
+            "%03.0f" % self.azimuth +
+            "</span>")
         self.drawarea.queue_draw()
         return True  # needed to keep the update method in the schedule
 
-    def updatestatus(self,msg):
+    def updatestatus(self, msg):
         self.statusbar.pop(0)
-        self.statusbar.push(0,msg)
+        self.statusbar.push(0, msg)
 
-
-
-def usage():
-    print "grotor [-v] [-s step] [-d display]"
-    print "-v: turn on verbose debugging logging"
-    print "-s: az button step, az degrees to step to create buttons (default=45)"
-    print "-d: az display size, size in pixels of az graphic display (default=220)"
 
 
 def main():
@@ -329,6 +346,6 @@ if __name__ == "__main__":
     logging.debug("starting logger")
 
     #  startup grotor
-    rotor = Rotor(azbutton_step, azdisplay_size)
+    rotor = RotorApp(azbutton_step, azdisplay_size)
     gtk.timeout_add(1000, rotor.position_update)
     main()
