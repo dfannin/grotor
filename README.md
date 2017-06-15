@@ -15,6 +15,8 @@ to run: `grotor [-v] [-s step] [-d size]  `
  -v verbose debug logging to console screen
  -s azbutton\_step default=45 degress, step size when creating az buttons
  -d azdisplay\_size default = 220, height/width in pixels of the az graphic display
+ -t azdisplay\_title default = "GRotor", title of grotor window and display
+ -r rchostport default = "127.0.0.1:4533", hostname and port for accessing rotctld
 
 ## Installation
 

@@ -13,6 +13,8 @@ import math
 import logging
 
 
+
+
 def crcolor(color):
     """ convert hex color to cario color model """
     gtkcolor = gtk.gdk.Color(color)
@@ -22,27 +24,36 @@ def crcolor(color):
 
 
 def usage():
-    print "grotor [-v] [-s step] [-d display]"
+    print "grotor [-v] [-s step] [-d display] [-t <title>] [-r host:port]"
+    print "version 1.2"
     print "-v: turn on verbose debugging logging"
     print "-s: az button step, az degrees to step to create buttons (default=45)"
     print "-d: az display size, size in pixels of az graphic display (default=220)"
+    print "-t: window title"
+    print "-r: host and port (default 127.0.0.1:4533)"
 
 
 class RotorApp(gtk.Window):
     """ Rotor """
 
-    def __init__(self, azbutton_step=45, azdisplay_size=220):
+    def __init__(self, azdisplay_title, rchostport,  azbutton_step=45, azdisplay_size=220):
         """ function """
         # main window
         logging.debug("rotor init")
         self.updatecount = 0
         self.azbutton_step = azbutton_step
         self.azdisplay_size = azdisplay_size
-        self.azimuth = 12.0
+        self.azdisplay_title = azdisplay_title
+        self.rotctl_path = "rotctl"
+        self.rchostport = rchostport
+        self.azimuth = 1.0
+
         # self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
         super(RotorApp, self).__init__()
+
+        #self.window.set_icon_from_file('grotor.png')
         self.connect("destroy", lambda w: gtk.main_quit())
-        self.set_title("Rotor Control")
+        self.set_title(self.azdisplay_title)
 
         color = gtk.gdk.color_parse('#EEEEEE')
         self.modify_bg(gtk.STATE_NORMAL, color)
@@ -68,7 +79,9 @@ class RotorApp(gtk.Window):
         #     menubox
         #     posbox
         #       eventbox1
-        #           labeltuc
+        #           labelaz
+        #       eventbox2
+        #           labeltitle
         #     actionbox
         #           buttonstop
         #     controlbox
@@ -163,6 +176,15 @@ class RotorApp(gtk.Window):
         self.eventbox1.add(self.labelaz)
         self.posbox.pack_start(self.eventbox1, True, True, 0)
 
+        self.eventbox2 = gtk.EventBox()
+        color = gtk.gdk.color_parse('#EEEEEE')
+        self.eventbox2.modify_bg(gtk.STATE_NORMAL, color)
+        self.eventbox2.set_border_width(5)
+
+        self.labeltitle = gtk.Label()
+        self.eventbox2.add(self.labeltitle)
+        self.posbox.pack_start(self.eventbox2, True, True, 0)
+
     def expose(self, drawarea, event, data=None):
         logging.debug("calling expose")
         self.drawable = self.drawarea.window
@@ -225,7 +247,8 @@ class RotorApp(gtk.Window):
         """ function """
         logging.debug("calling rotctl get_pos")
         try:
-            out_bytes = subprocess.check_output(['rotctl', '-m', '2', 'p'],
+
+            out_bytes = subprocess.check_output([self.rotctl_path, '-m', '2','-r',self.rchostport, 'p'],
                                                 stderr=subprocess.STDOUT)
             out_text = out_bytes.decode('utf-8')
             output = out_text.splitlines()
@@ -233,7 +256,7 @@ class RotorApp(gtk.Window):
         except subprocess.CalledProcessError as e:
             logging.error("rotctl get_pos called process error")
             self.updatestatus("failed to get position (rotctl issue?)")
-            return ['0', '0']
+            return ['-1', '0']
 
     def azbutcb(self, widget, data=None):
         """ function """
@@ -244,7 +267,7 @@ class RotorApp(gtk.Window):
         """ function """
         try:
             self.updatestatus("moving to %s degrees" % pos)
-            out_bytes = subprocess.check_output(['rotctl', '-m', '2', 'P', pos, '0'],
+            out_bytes = subprocess.check_output([self.rotctl_path, '-m', '2', '-r',self.rchostport,'P', pos, '0'],
                                                 stderr=subprocess.STDOUT)
             out_text = out_bytes.decode('utf-8')
             output = out_text.splitlines()
@@ -259,7 +282,7 @@ class RotorApp(gtk.Window):
         logging.debug("calling rotctl stop")
         self.updatestatus("stopping rotor")
         try:
-            subprocess.check_output(['rotctl', '-m', '2', 'S'],
+            subprocess.check_output([self.rotctl_path, '-m', '2', '-r',self.rchostport,'S'],
                                     stderr=subprocess.STDOUT)
             return True
         except subprocess.CalledProcessError as e:
@@ -284,7 +307,7 @@ class RotorApp(gtk.Window):
                 return False
 
             self.updatestatus("moving %s at speed  %s" % (dir, speed))
-            subprocess.check_output(['rotctl', '-m', '2', 'M', dir, speed],
+            subprocess.check_output([self.rotctl_path, '-m', '2', '-r',rchostport,'M', dir, speed],
                                     stderr=subprocess.STDOUT)
             return True
         except subprocess.CalledProcessError as e:
@@ -300,10 +323,17 @@ class RotorApp(gtk.Window):
             self.updatestatus("")
             self.updatecount = 0
         pos = self.rc()
-        self.azimuth = float(pos[0])
+        if float(pos[0]) < 0.0:
+            logging.debug("get_pos failed")
+        else:
+            self.azimuth = float(pos[0])
         self.labelaz.set_markup(
-            "<span font_family='FreeSans' weight='bold' font='36'>Azimuth: " +
+            "<span font_family='FreeSans' weight='bold' font='28'>Azimuth: " +
             "%03.0f" % self.azimuth +
+            "</span>")
+        self.labeltitle.set_markup(
+            "<span font_family='FreeSans' weight='regular' font='18'>" +
+            "%s" % self.azdisplay_title +
             "</span>")
         self.drawarea.queue_draw()
         return True  # needed to keep the update method in the schedule
@@ -327,8 +357,10 @@ if __name__ == "__main__":
     debug = logging.CRITICAL
     azbutton_step = 45
     azdisplay_size = 220
+    azdisplay_title = "Rotor Control"
+    rchostport = "127.0.0.1:4533"
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "vs:d:")
+        opts, args = getopt.getopt(sys.argv[1:], "vs:d:t:r:")
     except getopt.GetoptError:
         usage()
         sys.exit(2)
@@ -339,6 +371,10 @@ if __name__ == "__main__":
             azbutton_step = int(a)
         elif o == "-d":
             azdisplay_size = int(a)
+        elif o == "-t":
+            azdisplay_title = str(a)
+        elif o == "-r":
+            rchostport = str(a)
 
     #  setup logging
 
@@ -346,6 +382,6 @@ if __name__ == "__main__":
     logging.debug("starting logger")
 
     #  startup grotor
-    rotor = RotorApp(azbutton_step, azdisplay_size)
-    gtk.timeout_add(1000, rotor.position_update)
+    rotor = RotorApp(azdisplay_title,rchostport,azbutton_step, azdisplay_size)
+    gtk.timeout_add(1123, rotor.position_update)
     main()
